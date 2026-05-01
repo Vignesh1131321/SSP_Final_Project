@@ -1,0 +1,3 @@
+timestamp,primitive,threads,trial,duration_sec,warmup_sec,num_cores,samples,avg_per_core_util_pct,stdev_per_core_util_pct,normalized_per_core_util,total_equiv_busy_cores,status,notes
+2026-05-01T14:21:09,mutex,1,0,1,0,12,80,16.244296,18.913607,0.162443,1.949315,ok,per-core /proc/stat monitor
+2026-05-01T14:21:31,mutex,1,1,1,0,12,80,15.782986,16.706583,0.157830,1.893958,ok,per-core /proc/stat monitor

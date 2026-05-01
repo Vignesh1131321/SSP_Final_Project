@@ -1,0 +1,9 @@
+suite,experiment,primitive,threads,cs_cycles,trial,ops_per_sec,mean_latency_ns,p50_ns,p95_ns,p99_ns,stddev_ns,cv_percent,throughput_ops,false_sharing_factor,fairness_gini,fairness_jain,fairness_maxmin,fairness_cv,cpu_migrations,ctx_switches,notes
+scalability,scalability,mutex,1,0,0,3745178.00,183.55,180.00,200.00,261.00,44.60,24.30,3745178,0.00,0.00,0.00,0.00,0.00,-1,-1,"os-sched"
+scalability,scalability,spinlock,1,0,0,5922349.00,114.93,100.00,180.00,201.00,37.64,32.75,5922349,0.00,0.00,0.00,0.00,0.00,-1,-1,"os-sched"
+scalability,scalability,mcs_lock,1,0,0,6816814.00,101.31,100.00,101.00,111.00,28.27,27.91,6816814,0.00,0.00,0.00,0.00,0.00,-1,-1,"os-sched"
+scalability,scalability,semaphore,1,0,0,6841534.00,100.85,100.00,101.00,110.00,17.71,17.56,6841534,0.00,0.00,0.00,0.00,0.00,-1,-1,"os-sched"
+scalability,scalability,mutex,1,0,0,6796726.00,101.52,100.00,101.00,111.00,21.18,20.86,6796726,0.00,0.00,0.00,0.00,0.00,-1,-1,"os-sched"
+scalability,scalability,spinlock,1,0,0,7021168.00,97.06,100.00,101.00,101.00,14.56,15.00,7021168,0.00,0.00,0.00,0.00,0.00,-1,-1,"os-sched"
+scalability,scalability,mcs_lock,1,0,0,6847081.00,100.79,100.00,101.00,101.00,25.33,25.13,6847081,0.00,0.00,0.00,0.00,0.00,-1,-1,"os-sched"
+scalability,scalability,semaphore,1,0,0,6772038.00,102.01,100.00,101.00,111.00,18.83,18.46,6772038,0.00,0.00,0.00,0.00,0.00,-1,-1,"os-sched"

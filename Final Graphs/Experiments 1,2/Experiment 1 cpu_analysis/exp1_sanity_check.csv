@@ -1,0 +1,3 @@
+timestamp,primitive,threads,trial,cs_cycles,duration_sec,warmup_sec,num_cores,samples,avg_per_core_util_pct,stdev_per_core_util_pct,normalized_per_core_util,total_equiv_busy_cores,status,notes
+2026-05-01T15:47:06,spinlock,1,0,2000,3,1,12,319,12.855277,15.002936,0.128553,1.542633,ok,per-core /proc/stat monitor
+2026-05-01T15:47:22,spinlock,2,0,2000,3,1,12,319,18.660621,17.438347,0.186606,2.239275,ok,per-core /proc/stat monitor

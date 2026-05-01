@@ -1,0 +1,7 @@
+threads,placement,smt_mode,false_shared_mean_ops,false_shared_std_ops,padded_mean_ops,padded_std_ops,slowdown_mean,formula
+4,compact,off,963401059.0,50390640.799117655,1426265439.8,5025109.872679035,1.480448279017306,slowdown = padded throughput / false-shared throughput
+8,compact,off,738324510.8,25555393.8703291,1553982675.8,10779338.559458459,2.1047420924929154,slowdown = padded throughput / false-shared throughput
+12,compact,off,760952625.2,2843114.167236773,1540119465.2,18659895.07137457,2.0239360693383674,slowdown = padded throughput / false-shared throughput
+4,spread,off,651035010.8,18506968.602504876,738886889.8,13922706.92896345,1.1349418657101813,slowdown = padded throughput / false-shared throughput
+8,spread,off,688090531.6,21252417.577659097,1486362830.2,53571135.906276435,2.1601268465993813,slowdown = padded throughput / false-shared throughput
+12,spread,off,724973796.6,6941307.90514405,1469222063.8,14234047.003121817,2.0265864375931844,slowdown = padded throughput / false-shared throughput

@@ -1,0 +1,4 @@
+threads,placement,smt_mode,false_shared_mean_ops,false_shared_std_ops,padded_mean_ops,padded_std_ops,slowdown_mean,slowdown_std,formula
+4,spread,off,6.51035e+08,1.8507e+07,7.38887e+08,1.39227e+07,1.13561,0.0332332,slowdown=padded_throughput/false_shared_throughput
+8,spread,off,6.88091e+08,2.12524e+07,1.48636e+09,5.35711e+07,2.16344,0.134145,slowdown=padded_throughput/false_shared_throughput
+12,spread,off,7.24974e+08,6.94131e+06,1.46922e+09,1.4234e+07,2.02661,0.010799,slowdown=padded_throughput/false_shared_throughput

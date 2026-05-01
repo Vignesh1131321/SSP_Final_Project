@@ -1,0 +1,2 @@
+platform_info,system,os=Linux,version=6.17.0-20-generic,logical_cpus=12,physical_cores=12,numa_nodes=149,cache_line=64,scheduler=CFS / EEVDF (fair-share preemptive),sync_backend=futex (fast userspace mutex)
+platform_info,system,os=Linux,version=6.17.0-20-generic,logical_cpus=12,physical_cores=12,numa_nodes=149,cache_line=64,scheduler=CFS / EEVDF (fair-share preemptive),sync_backend=futex (fast userspace mutex)

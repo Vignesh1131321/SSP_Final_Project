@@ -1,0 +1,196 @@
+========================================================================
+  JAIN FAILURE ANALYSIS — Rigorous Metric Comparison Suite
+========================================================================
+
+────────────────────────────────────────────────────────────────────────
+  SECTION 1 & 2: Controlled Jain-Failure Scenarios + Verification
+────────────────────────────────────────────────────────────────────────
+
+  JF-1: Two-tier (60-40)
+    Counts: [120. 120. 120. 120.  48.  48.  48.  48.]
+    Σxᵢ = 672.0, Σxᵢ² = 66816.0
+    Jain = (672.0)² / (8 × 66816.0) = 451584.0 / 534528.0 = 0.8448
+    Gini = 0.2143
+    Jain_min(theory) = 1/8 = 0.1250
+    Gini_max(theory) = 7/8 = 0.8750
+    Is Jain-failure? YES ✓
+  [JAIN DIVERGES] Jain=0.845 (≥0.8, appears fair) | Gini=0.214 (≥0.15, detects inequality) — Jain is misleadingly optimistic
+
+  JF-2: Bimodal-threelevel
+    Counts: [150. 150. 150. 150.  50.  50.  50.  50.]
+    Σxᵢ = 800.0, Σxᵢ² = 100000.0
+    Jain = (800.0)² / (8 × 100000.0) = 640000.0 / 800000.0 = 0.8000
+    Gini = 0.2500
+    Jain_min(theory) = 1/8 = 0.1250
+    Gini_max(theory) = 7/8 = 0.8750
+    Is Jain-failure? YES ✓
+  [JAIN DIVERGES] Jain=0.800 (≥0.8, appears fair) | Gini=0.250 (≥0.15, detects inequality) — Jain is misleadingly optimistic
+
+  JF-3: One-extreme-outlier
+    Counts: [115. 115. 115. 115. 115. 115. 115.   5.]
+    Σxᵢ = 810.0, Σxᵢ² = 92600.0
+    Jain = (810.0)² / (8 × 92600.0) = 656100.0 / 740800.0 = 0.8857
+    Gini = 0.1188
+    Jain_min(theory) = 1/8 = 0.1250
+    Gini_max(theory) = 7/8 = 0.8750
+    Is Jain-failure? NO
+  [METRICS AGREE: FAIR] Jain=0.886 ≥ 0.8, Gini=0.119 < 0.15 — Both concur distribution is fair
+
+  JF-4: Three-tier
+    Counts: [160. 160.  80.  80.  40.  40.  40.  40.]
+    Σxᵢ = 640.0, Σxᵢ² = 70400.0
+    Jain = (640.0)² / (8 × 70400.0) = 409600.0 / 563200.0 = 0.7273
+    Gini = 0.3125
+    Jain_min(theory) = 1/8 = 0.1250
+    Gini_max(theory) = 7/8 = 0.8750
+    Is Jain-failure? NO
+  [METRICS AGREE: UNFAIR] Jain=0.727 < 0.8, Gini=0.312 ≥ 0.15 — Both detect inequality
+
+  JF-5: Quartet-divergence
+    Counts: [200. 200. 100. 100.  50.  50.  50.  50.]
+    Σxᵢ = 800.0, Σxᵢ² = 110000.0
+    Jain = (800.0)² / (8 × 110000.0) = 640000.0 / 880000.0 = 0.7273
+    Gini = 0.3125
+    Jain_min(theory) = 1/8 = 0.1250
+    Gini_max(theory) = 7/8 = 0.8750
+    Is Jain-failure? NO
+  [METRICS AGREE: UNFAIR] Jain=0.727 < 0.8, Gini=0.312 ≥ 0.15 — Both detect inequality
+
+────────────────────────────────────────────────────────────────────────
+  SECTION 3: Reference Baselines (NOT Jain failures)
+────────────────────────────────────────────────────────────────────────
+
+  REF-A: Perfect fairness
+    Counts: [100. 100. 100. 100. 100. 100. 100. 100.]
+    Σxᵢ = 800.0, Σxᵢ² = 80000.0
+    Jain = (800.0)² / (8 × 80000.0) = 640000.0 / 640000.0 = 1.0000
+    Gini = 0.0000
+    Jain_min(theory) = 1/8 = 0.1250
+    Gini_max(theory) = 7/8 = 0.8750
+    Is Jain-failure? NO
+  [METRICS AGREE: FAIR] Jain=1.000 ≥ 0.8, Gini=0.000 < 0.15 — Both concur distribution is fair
+
+  REF-B: Severe starvation
+    Counts: [3.e+02 5.e+00 5.e+00 1.e-03 1.e-03 1.e-03 1.e-03 1.e-03]
+    Σxᵢ = 310.0, Σxᵢ² = 90050.0
+    Jain = (310.0)² / (8 × 90050.0) = 96103.1 / 720400.0 = 0.1334
+    Gini = 0.8629
+    Jain_min(theory) = 1/8 = 0.1250
+    Gini_max(theory) = 7/8 = 0.8750
+    Is Jain-failure? NO
+  [METRICS AGREE: UNFAIR] Jain=0.133 < 0.8, Gini=0.863 ≥ 0.15 — Both detect inequality
+
+  REF-C: Random noise
+    Counts: [101.5235854   94.80007947 103.75225598 104.70282358  90.24482406
+  93.48910247 100.63920202  98.41878704]
+    Σxᵢ = 787.6, Σxᵢ² = 77720.2
+    Jain = (787.6)² / (8 × 77720.2) = 620267.5 / 621761.2 = 0.9976
+    Gini = 0.0278
+    Jain_min(theory) = 1/8 = 0.1250
+    Gini_max(theory) = 7/8 = 0.8750
+    Is Jain-failure? NO
+  [METRICS AGREE: FAIR] Jain=0.998 ≥ 0.8, Gini=0.028 < 0.15 — Both concur distribution is fair
+
+────────────────────────────────────────────────────────────────────────
+  JF-6: High-N Dilution Study (K=3)
+────────────────────────────────────────────────────────────────────────
+
+  JF-6: N=4, K=3
+    Counts: [300. 100. 100. 100.]
+    Σxᵢ = 600.0, Σxᵢ² = 120000.0
+    Jain = (600.0)² / (4 × 120000.0) = 360000.0 / 480000.0 = 0.7500
+    Gini = 0.2500
+    Jain_min(theory) = 1/4 = 0.2500
+    Gini_max(theory) = 3/4 = 0.7500
+    Is Jain-failure? NO
+  [METRICS AGREE: UNFAIR] Jain=0.750 < 0.8, Gini=0.250 ≥ 0.15 — Both detect inequality
+
+  JF-6: N=8, K=3
+    Counts: [300. 100. 100. 100. 100. 100. 100. 100.]
+    Σxᵢ = 1000.0, Σxᵢ² = 160000.0
+    Jain = (1000.0)² / (8 × 160000.0) = 1000000.0 / 1280000.0 = 0.7812
+    Gini = 0.1750
+    Jain_min(theory) = 1/8 = 0.1250
+    Gini_max(theory) = 7/8 = 0.8750
+    Is Jain-failure? NO
+  [METRICS AGREE: UNFAIR] Jain=0.781 < 0.8, Gini=0.175 ≥ 0.15 — Both detect inequality
+
+  JF-6: N=16, K=3
+    Counts: [300. 100. 100. 100. 100. 100. 100. 100. 100. 100. 100. 100. 100. 100.
+ 100. 100.]
+    Σxᵢ = 1800.0, Σxᵢ² = 240000.0
+    Jain = (1800.0)² / (16 × 240000.0) = 3240000.0 / 3840000.0 = 0.8438
+    Gini = 0.1042
+    Jain_min(theory) = 1/16 = 0.0625
+    Gini_max(theory) = 15/16 = 0.9375
+    Is Jain-failure? NO
+  [METRICS AGREE: FAIR] Jain=0.844 ≥ 0.8, Gini=0.104 < 0.15 — Both concur distribution is fair
+
+  JF-6: N=32, K=3
+    Counts: [300. 100. 100. 100. 100. 100. 100. 100. 100. 100. 100. 100. 100. 100.
+ 100. 100. 100. 100. 100. 100. 100. 100. 100. 100. 100. 100. 100. 100.
+ 100. 100. 100. 100.]
+    Σxᵢ = 3400.0, Σxᵢ² = 400000.0
+    Jain = (3400.0)² / (32 × 400000.0) = 11560000.0 / 12800000.0 = 0.9031
+    Gini = 0.0570
+    Jain_min(theory) = 1/32 = 0.0312
+    Gini_max(theory) = 31/32 = 0.9688
+    Is Jain-failure? NO
+  [METRICS AGREE: FAIR] Jain=0.903 ≥ 0.8, Gini=0.057 < 0.15 — Both concur distribution is fair
+
+  JF-6: N=64, K=3
+    Counts: [300. 100. 100. 100. 100. 100. 100. 100. 100. 100. 100. 100. 100. 100.
+ 100. 100. 100. 100. 100. 100. 100. 100. 100. 100. 100. 100. 100. 100.
+ 100. 100. 100. 100. 100. 100. 100. 100. 100. 100. 100. 100. 100. 100.
+ 100. 100. 100. 100. 100. 100. 100. 100. 100. 100. 100. 100. 100. 100.
+ 100. 100. 100. 100. 100. 100. 100. 100.]
+    Σxᵢ = 6600.0, Σxᵢ² = 720000.0
+    Jain = (6600.0)² / (64 × 720000.0) = 43560000.0 / 46080000.0 = 0.9453
+    Gini = 0.0298
+    Jain_min(theory) = 1/64 = 0.0156
+    Gini_max(theory) = 63/64 = 0.9844
+    Is Jain-failure? NO
+  [METRICS AGREE: FAIR] Jain=0.945 ≥ 0.8, Gini=0.030 < 0.15 — Both concur distribution is fair
+
+────────────────────────────────────────────────────────────────────────
+  VERIFICATION TABLE
+────────────────────────────────────────────────────────────────────────
+  Scenario                         Jain     Gini    J_min    G_max   Failure?
+  --------------------------------------------------------------------------
+  JF-1: Two-tier (60-40)         0.8448   0.2143   0.1250   0.8750      YES ✓
+  JF-2: Bimodal-threelevel       0.8000   0.2500   0.1250   0.8750      YES ✓
+  JF-3: One-extreme-outlier      0.8857   0.1188   0.1250   0.8750         NO
+  JF-4: Three-tier               0.7273   0.3125   0.1250   0.8750         NO
+  JF-5: Quartet-divergence       0.7273   0.3125   0.1250   0.8750         NO
+  REF-A: Perfect fairness        1.0000   0.0000   0.1250   0.8750         NO
+  REF-B: Severe starvation       0.1334   0.8629   0.1250   0.8750         NO
+  REF-C: Random noise            0.9976   0.0278   0.1250   0.8750         NO
+
+────────────────────────────────────────────────────────────────────────
+  ASSERTION CHECKS
+────────────────────────────────────────────────────────────────────────
+  ✓ JF-1: Two-tier (60-40) IS a genuine Jain failure (J=0.845 ≥ 0.8, G=0.214 ≥ 0.15)
+  ✓ JF-2: Bimodal-threelevel IS a genuine Jain failure (J=0.800 ≥ 0.8, G=0.250 ≥ 0.15)
+  ⚠ WARNING: JF-3: One-extreme-outlier does NOT meet Jain failure criteria (J=0.886, G=0.119). Will NOT be annotated as a Jain failure in plots.
+  ⚠ WARNING: JF-4: Three-tier does NOT meet Jain failure criteria (J=0.727, G=0.312). Will NOT be annotated as a Jain failure in plots.
+  ⚠ WARNING: JF-5: Quartet-divergence does NOT meet Jain failure criteria (J=0.727, G=0.312). Will NOT be annotated as a Jain failure in plots.
+  ✓ Baseline REF-A: Perfect fairness correctly NOT flagged as Jain failure
+  ✓ Baseline REF-B: Severe starvation correctly NOT flagged as Jain failure
+  ✓ Baseline REF-C: Random noise correctly NOT flagged as Jain failure
+
+  Total genuine Jain failure scenarios: 2/5
+
+────────────────────────────────────────────────────────────────────────
+  SECTION 4: Generating Publication-Quality Plots
+────────────────────────────────────────────────────────────────────────
+  Saved plot_a_jain_vs_gini_scatter.png/.pdf
+  Saved plot_b_per_thread_bars.png/.pdf
+  Saved plot_c_thread_scaling.png/.pdf
+  Saved plot_d_lorenz_curves.png/.pdf
+  Saved plot_e_metric_comparison.png/.pdf
+
+========================================================================
+  ANALYSIS COMPLETE
+  Output directory: /home/vignesh/Downloads/Projects/SSP/sync_benchmark/scripts/../output/jain_failure_analysis
+  Figures saved as PNG (300 DPI) and PDF
+========================================================================

@@ -1,0 +1,671 @@
+\documentclass[conference]{IEEEtran}
+
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath, amssymb}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{cite}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{placeins}
+
+\renewcommand{\thefigure}{\arabic{figure}}
+
+% -------------------------------------------------------
+% Title and Authors
+% -------------------------------------------------------
+\title{An Empirical Evaluation of Synchronization Mechanisms in Shared-Memory Parallel Systems}
+
+\author{
+\IEEEauthorblockN{Pasupuleti T A N S V Vignesh}
+\IEEEauthorblockA{\textit{IIIT-Bangalore}\\
+IMT2023003}
+\and
+\IEEEauthorblockN{Kunda Sri Krishna Chaitanya}
+\IEEEauthorblockA{\textit{IIIT-Bangalore}\\
+IMT2023039}
+
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Synchronization primitives are a fundamental building block of concurrent applications, yet their comparative behavior across workloads, thread counts, and hardware configurations is rarely studied in a unified experimental framework. This paper evaluates four synchronization primitives---\texttt{std::mutex}, POSIX Semaphore, Test-and-Set SpinLock (TAS), and the MCS queue lock---across six dimensions: scalability, critical-section contention sensitivity, false-sharing overhead, fairness, tail-latency distribution, and throughput saturation under oversubscription. We apply the Gini coefficient to per-thread lock acquisitions as a single, scale-independent measure in $[0,1]$ that quantifies imbalance and potential starvation. In addition to microbenchmarks, we validate the findings on two real-world concurrent workloads, a striped-lock concurrent hash table and a bounded producer-consumer queue, under realistic access patterns.
+
+\end{abstract}
+
+\begin{IEEEkeywords}
+Synchronization Primitives, Mutual Exclusion, MCS Lock, SpinLock,
+Semaphore, Gini Coefficient, Lock Fairness, False Sharing,
+Concurrent Data Structures, Benchmarking, Multicore
+\end{IEEEkeywords}
+
+% -------------------------------------------------------
+% 1.  Introduction
+% -------------------------------------------------------
+\section{Introduction}
+
+The correctness and performance of every multi-threaded application ultimately rests on its choice of synchronization primitive. From an operating-system scheduler to a web-server connection pool, the lock that guards a critical section determines throughput, latency, and fairness for all competing threads. Despite its importance, practitioners often choose \texttt{std::mutex} across workloads, largely due to the lack of clear, reproducible comparisons under diverse and realistic conditions.
+
+This paper addresses that gap through a multi-experiment benchmark suite implemented in C++17. We deliberately select four primitives that span the design space along three axes---memory model (kernel vs.\ user-space), waiting strategy (blocking vs.\ spinning), and fairness guarantee (none, weak, FIFO)---so that differences in experimental outcomes can be traced back to specific design decisions rather than incidental implementation details. The four primitives are: \texttt{std::mutex} (hybrid user/kernel, futex-based, weakly fair), POSIX Semaphore (pure kernel, weakly fair), Test-and-Set SpinLock (pure user-space, no fairness guarantee), and MCS Lock \cite{mellor1991algorithms} (pure user-space, FIFO-fair, local spinning).
+
+Our principal contributions are as follows.
+
+\begin{enumerate}
+    \item A reproducible benchmark suite covering six experimental dimensions---scalability, contention, false sharing, fairness, tail latency, and throughput saturation.
+
+    \item Application of the \emph{Gini coefficient} as a fairness metric for lock benchmarking, in comparison with Jain’s fairness index commonly used in literature, showing that Gini provides a more sensitive and reliable measure of fairness across varying thread counts and lock behaviors.
+
+    \item Two real-world concurrent workloads (a concurrent hash table and a bounded producer-consumer queue) under six access-pattern scenarios each, bridging the gap between microbenchmarks and application-level performance.
+\end{enumerate}
+
+The remainder of this paper is organised as follows.
+Section~\ref{sec:related} surveys related work.
+Section~\ref{sec:methodology} describes the benchmark methodology.
+Section~\ref{sec:results} presents experimental results.
+
+% -------------------------------------------------------
+% 2.  Related Work
+% -------------------------------------------------------
+\section{Related Work}
+\label{sec:related}
+
+\subsection{MCS vs. TAS SpinLock}
+
+Queue-based locks such as MCS \cite{mellor1991algorithms} avoid contention on a single shared memory location by letting each thread spin on a private node, which reduces coherence traffic and improves scalability. In contrast, the Test-and-Set spinlock repeatedly updates one shared cache line, so it is a useful baseline for exposing cache-thrashing under contention. We therefore use MCS as the queue-lock reference and TAS as the simplest contention-heavy baseline.
+
+\subsection{Gini Coefficient as a Fairness Metric}
+
+Fairness in lock benchmarking is often reported with max/min ratio or coefficient of variation, but both are limited for cross-experiment comparison. The \emph{Gini coefficient} \cite{gini1921} resolves this by providing a bounded, scale-independent measure of distributional inequality. For $n$ threads with sorted per-thread acquisition counts $x_1 \leq x_2 \leq \cdots \leq x_n$, it is defined as:
+
+\begin{equation}
+G \;=\; \frac{\displaystyle\sum_{i=1}^{n}(2i - n - 1)\,x_i}
+             {n\displaystyle\sum_{i=1}^{n} x_i}
+\label{eq:gini}
+\end{equation}
+
+\noindent $G = 0$ indicates perfect equality and $G = 1$ indicates complete starvation. The metric is scale-independent, so it remains comparable even when throughput differs substantially across primitives. For our four primitives, MCS should be closest to zero, TAS highest, and \texttt{std::mutex}/Semaphore intermediate.
+
+\subsection{Statistical Benchmarking Methodology}
+
+Following Georges et al.\ \cite{georges2007statistically}, each configuration uses warmup phases, repeated trials, and confidence intervals. We use Welford's algorithm \cite{welford1962} for numerically stable online mean and variance, and reservoir sampling for tail latencies as recommended by Fleming and Wallace \cite{fleming1986}.
+
+% -------------------------------------------------------
+% 3.  Benchmark Methodology
+% -------------------------------------------------------
+\section{Benchmark Methodology}
+\label{sec:methodology}
+
+\subsection{Primitives Selected}
+
+We evaluate four primitives chosen to maximally span the design space along three axes: memory model, waiting strategy, and fairness guarantee.
+Table~\ref{tab:primitives} summarises their key properties.
+
+\begin{table}[ht]
+\centering
+\caption{Synchronization Primitives Under Study}
+\label{tab:primitives}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{lllll}
+	oprule
+	extbf{Primitive} & \textbf{Space} & \textbf{Waits}
+  & \textbf{Fairness} & \textbf{Traffic} \\
+\midrule
+	exttt{std::mutex}  & User+Kernel & Block  & Weak & $O(1)$ \\
+POSIX Semaphore      & Kernel      & Block  & Weak & $O(1)$ \\
+SpinLock (TAS)       & User        & Spin   & None & $O(P)$ \\
+MCS Lock             & User        & Spin   & FIFO & $O(1)$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Experimental Dimensions}
+
+We evaluate six microbenchmark dimensions:
+
+\begin{enumerate}
+    \item \textbf{Scalability} --- Throughput and mean latency vs.\ thread count at zero critical-section work.
+
+    \item \textbf{Contention} --- Throughput vs.\ busy-loop critical-section size at fixed thread count.
+
+    \item \textbf{False Sharing} --- Throughput ratio of shared-line vs.\ padded counters, with and without CPU pinning.
+
+    \item \textbf{Fairness} --- Gini coefficient of per-thread acquisition counts at 2, 4, and 8 threads.
+
+    \item \textbf{Latency Distribution} --- P50/P95/P99/P99.9 latency from reservoir-sampled distributions.
+
+    \item \textbf{Throughput Saturation} --- Throughput sweep from 1 thread to $2\times$ hardware concurrency.
+\end{enumerate}
+
+\subsection{Statistical Validity}
+
+Each configuration is repeated multiple times with a warmup phase to stabilise CPU frequency scaling, TLB warm-up, and branch prediction. Aggregate statistics use Welford's algorithm \cite{welford1962} and 95\% confidence intervals use the Student $t$-distribution with $n-1$ degrees of freedom. Percentile latencies are computed from reservoir-sampled distributions to bound memory usage at $O(k)$ for a fixed reservoir size $k$.
+
+% -------------------------------------------------------
+% 4.  Real-World Workload Experiments
+% -------------------------------------------------------
+% \section{Real-World Workload Experiments}
+% \label{sec:workloads}
+
+% Microbenchmarks isolate individual lock properties but cannot reveal
+% how synchronization choices interact with realistic access patterns or
+% data-structure semantics.
+% We therefore complement the six microbenchmarks with two real-world
+% concurrent workloads: a concurrent hash table and a bounded
+% producer-consumer queue.
+% Both are implemented with multiple synchronization strategies so that
+% their relative performance can be measured under identical workloads.
+
+% \subsection{Concurrent Hash Table}
+
+% \subsubsection{Implementation Variants}
+
+% Three synchronization strategies are evaluated on the same hash-table
+% interface (insert, lookup, delete):
+
+% \begin{itemize}
+%     \item \textbf{Coarse-grained mutex:} A single \texttt{std::mutex}
+%           protects the entire table.
+%           Simple and correct but fully serialises all operations
+%           regardless of key locality.
+
+%     \item \textbf{Fine-grained reader-writer lock:} The table is
+%           divided into 64 independent shards, each guarded by a
+%           \texttt{std::shared\_mutex}.
+%           Concurrent reads within the same shard and across different
+%           shards proceed without blocking one another.
+
+%     \item \textbf{Lock-free CAS:} An open-addressing table in which
+%           each slot has an \texttt{std::atomic} key.
+%           Insert uses compare-and-exchange; lookup is wait-free;
+%           delete uses a tombstone key.
+%           No kernel transitions occur at any contention level.
+% \end{itemize}
+
+% \subsubsection{Access Pattern Scenarios}
+
+% Six scenarios stress different properties of each synchronization
+% strategy.
+
+% \paragraph{S1 --- Read-Dominant (90/5/5).}
+% 90\% lookups, 5\% inserts, 5\% deletes.
+% Models a session cache where data is written infrequently but read
+% continuously.
+% The fine-grained RW lock is expected to lead because shared
+% (\texttt{shared\_lock}) acquisitions allow unlimited concurrent reads
+% within each shard.
+% The coarse-grained mutex unnecessarily serialises every read.
+
+% \paragraph{S2 --- Write-Dominant (10/80/10).}
+% 10\% lookups, 80\% inserts, 10\% deletes.
+% Models an event ingestion pipeline.
+% All three variants face heavy serialisation; the lock-free CAS
+% variant avoids kernel transitions and is expected to lead.
+
+% \paragraph{S3 --- Balanced OLTP (50/33/17).}
+% 50\% lookups, 33\% inserts, 17\% deletes.
+% This is our primary baseline scenario and the reference for all
+% comparative graphs.
+
+% \paragraph{S4 --- Hotspot (Zipfian keys, $\alpha = 1.2$).}
+% All operations use Zipfian-distributed keys so that $\approx 20\%$ of
+% keys receive $\approx 80\%$ of accesses.
+% This concentrates contention on the shards holding hot keys for the
+% fine-grained lock and causes repeated CAS retries on hot slots for
+% the lock-free variant.
+% The coarse-grained mutex is unaffected by key distribution because it
+% serialises the entire table regardless.
+
+% \paragraph{S5 --- Bursty Arrival.}
+% Threads alternate between a 10~ms burst phase at maximum rate and a
+% 10~ms idle phase, unsynchronised across threads.
+% We report P99 latency \emph{during burst phases} specifically, which
+% is the most operationally relevant metric for latency-sensitive
+% services where intermittent load spikes determine tail latency.
+
+% \paragraph{S6 --- Read-after-Write Locality.}
+\section{Experimental Results: Microbenchmarks and Workloads}
+\label{sec:results}
+
+\subsection{Experiment 1: Lock Scalability and CPU Utilization}
+
+\subsubsection{Setup}
+All four primitives were tested at thread counts $T \in \{1,2,4,8,16,32\}$. The system provides 12 logical cores, so $T > 12$ represents oversubscription. The critical section performs zero work to isolate lock overhead for throughput analysis. Additionally, a separate trial was conducted with the critical section increased to 2000 busy-loop cycles to measure CPU utilization, ensuring sufficient duration to track process-wide CPU usage via \texttt{/proc/stat}. Each configuration ran for 5~s with a 2~s warmup, repeated 5~times, and threads were pinned to distinct logical cores (for throughput) and left to the OS scheduler (for CPU utilization).
+
+\subsubsection{Results}
+Figure~\ref{fig:scalability} shows throughput as thread count increases. 
+SpinLock achieves the highest throughput at $T=1$ due to minimal user-space overhead. 
+However, its performance degrades rapidly with increasing threads because repeated 
+test-and-set operations generate high cache-coherence traffic.
+
+MCS lock scales better up to moderate thread counts ($T \leq 8$) by ensuring that 
+each thread spins on a private cache line, reducing contention on shared memory. 
+Beyond hardware concurrency ($T > 12$), its performance drops due to oversubscription, 
+where lock handoff is delayed by thread scheduling.
+
+In contrast, \texttt{std::mutex} and Semaphore exhibit a plateau after $T \approx 4\text{--}8$. 
+At this point, contention causes threads to block and be managed by the OS scheduler. 
+As the critical section is inherently serialized, additional threads do not increase 
+throughput, resulting in a stable but capped performance dominated by context-switch overhead.
+
+Figure~\ref{fig:cpu_utilization} illustrates the normalized per-core CPU utilization across varying thread counts with a 2000-cycle critical section. At lower thread counts ($T \le 8$), all primitives exhibit relatively similar CPU utilization, increasing linearly as more cores are engaged. However, under oversubscription ($T \ge 16$), a stark divergence occurs. The SpinLock's utilization sharply rises to plateau near 1.0 (100\% utilization per core), as waiting threads continuously spin in user space burning CPU cycles. In contrast, the sleeping locks (\texttt{std::mutex} and Semaphore) experience a significant decline in CPU utilization. Because the critical section is sufficiently long (2000 cycles), blocked threads have enough time to be parked by the OS scheduler, leaving the remaining cores largely idle rather than actively thrashing. Note that the MCS lock drops precipitously at $T \ge 16$ because its execution is explicitly skipped to prevent deadlock under oversubscription without CPU pinning; its reported utilization merely reflects baseline system noise during immediate termination.
+
+\textbf{Key finding:} \emph{MCS lock provides the best scalability up to hardware concurrency, 
+while SpinLock is only optimal at very low thread counts. Blocking primitives trade peak 
+performance for stability, achieving consistent throughput under high contention. Furthermore, SpinLock fully saturates CPU resources regardless of contention, whereas sleeping primitives efficiently relinquish CPU time when oversubscribed.}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.95\linewidth]{figs/scalability.png}
+\caption{Throughput vs thread count for all synchronization primitives.}
+\label{fig:scalability}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.95\linewidth]{figs/exp1_cpu_utilization_research_grade.png}
+\caption{Normalized per-core CPU utilization vs thread count (CS = 2000 cycles).}
+\label{fig:cpu_utilization}
+\end{figure}
+
+\subsection{Experiment 2: Contention / Critical-Section Size}
+
+\subsubsection{Setup}
+This experiment fixes $T = 8$ and varies critical-section (CS) work over $\{0,100,1000,10{,}000\}$ busy-loop cycles. The setup otherwise matches Experiment~1: 2~s runs, 1~s warmup, five repetitions, and pinned threads.
+
+\subsubsection{Results}
+Figure~\ref{fig:cs_throughput} shows throughput as CS work increases. 
+At CS~=~0, MCS Lock achieves the highest throughput due to FIFO ordering and reduced cache-coherence traffic. 
+In contrast, SpinLock (TAS) suffers from contention-induced spinning, leading to coherence overhead even for short CS. 
+
+\texttt{std::mutex} and Semaphore perform similarly at small CS sizes but incur higher overhead due to blocking and wake-up costs. 
+However, they avoid excessive CPU spinning, making them more stable than SpinLock under contention.
+
+As CS work increases, throughput drops for all primitives since execution becomes dominated by serialized critical sections. 
+The relative differences between locks diminish at large CS sizes as lock overhead becomes negligible compared to CS execution time.
+
+\textbf{Key finding:} \emph{MCS provides the best scalability under contention, SpinLock is penalized by coherence overhead, and blocking primitives trade higher overhead for better stability. At large CS sizes, all approaches converge due to serialization.}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.95\linewidth]{figs/contention_throughput.png}
+\caption{Throughput vs critical-section size at $T=8$ threads.}
+\label{fig:cs_throughput}
+\end{figure}
+
+\subsection{Experiment 3: False Sharing}
+
+\subsubsection{Setup}
+This experiment measures the false-sharing penalty by comparing padded and false-shared counter layouts under SMT ON and SMT OFF modes. The reported metric is the slowdown factor, defined as padded throughput divided by false-shared throughput, at thread counts $T \in \{1,2,3,4,6,8,10,12\}$. Each configuration uses the same 2~s run length, 1~s warmup, five repetitions, and pinned threads as the previous experiments.
+
+\subsubsection{Results}
+Figure~\ref{fig:false_sharing} shows that false sharing consistently imposes a throughput penalty above the $1.0\times$ baseline once more than one thread is active. Under both SMT ON and SMT OFF, the slowdown rises to roughly $2\times$ at moderate and high thread counts, with the largest penalties appearing around $T=8$ to $12$. SMT OFF exposes the cache-line ping-pong more clearly, while SMT ON slightly smooths the curve but does not remove the effect.
+
+\textbf{Key finding:} \emph{False sharing reduces throughput by about $2\times$ under contention, and the effect persists regardless of SMT mode. Padding shared counters to separate cache lines is a simple and effective way to recover performance.}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.95\linewidth]{figs/false_sharing_slowdown.png}
+\caption{False-sharing slowdown factor with 95\% confidence intervals. The slowdown is defined as padded throughput divided by false-shared throughput.}
+\label{fig:false_sharing}
+\end{figure}
+
+% \begin{figure}[!htbp]
+% \centering
+% \includegraphics[width=0.95\linewidth]{figs/crossover.png}
+% \caption{Crossover region between SpinLock and \texttt{std::mutex} as a function of critical-section size.}
+% \label{fig:crossover}
+% \end{figure}
+
+
+% \subsection{Experiment 3: False Sharing}
+
+% \subsubsection{Setup}
+% Two volatile \texttt{uint64\_t} counters are incremented by
+% alternating threads.
+% In the \emph{false-shared} configuration, both counters sit within
+% the same 64-byte cache line (the default struct layout).
+% In the \emph{padded} configuration, each counter is
+% \texttt{alignas(64)}-padded to occupy its own line.
+% Throughput is measured for 2~s at $T \in \{2, 4, 8\}$, with and
+% without CPU affinity pinning via
+% \texttt{pthread\_setaffinity\_np}.
+
+% \subsubsection{Results}
+
+% The false-sharing factor---the ratio of padded throughput to
+% false-shared throughput---ranges from $2.5\times$ at $T = 2$ to
+% $4.9\times$ at $T = 8$.
+% A struct layout choice that appears entirely innocuous can reduce
+% throughput by nearly $5\times$ with no change to the algorithm or
+% synchronization primitive.
+
+% The effect is more pronounced with CPU pinning, because without
+% pinning the OS scheduler may occasionally migrate a thread to a
+% different physical core, transiently breaking the tight
+% invalidation loop.
+% With pinning, threads are permanently on adjacent cores sharing the
+% same L2 cache slice, maximising the frequency of
+% round-trip invalidations.
+
+% This result provides important context for interpreting the
+% scalability experiment: part of SpinLock's poor high-thread-count
+% performance is attributable to a built-in false-sharing scenario.
+% All waiting threads poll the same atomic flag, which is a single
+% cache line written on every unlock.
+% MCS Lock eliminates this by construction: each thread's spin node
+% is a separate \texttt{alignas(64)} struct, so no two waiting
+% threads share a cache line.
+
+% \textbf{Key finding:}
+% \emph{False sharing imposes a $2.5\times$--$4.9\times$ throughput
+% penalty independent of lock choice.
+% MCS Lock is the only primitive among the four whose waiting
+% mechanism is immune to false sharing by design.
+% All practical multi-threaded data structures should pad hot counters
+% and lock state to the cache-line boundary.}
+
+\subsection{Experiment 4: Fairness (Gini vs.\ Jain)}
+\label{sec:fairness}
+
+\subsubsection{Setup}
+Fairness is evaluated using Jain's fairness index and the Gini coefficient on per-thread lock acquisition counts at $T\in\{2,4,8\}$ under the same experimental conditions as earlier sections. To rigorously test metric sensitivity, we designed synthetic acquisition distributions spanning perfect equality and varying degrees of unfairness:
+\begin{itemize}
+    \item \textbf{REF (Reference Baselines):} Ideal or extreme baseline scenarios. For example, \emph{REF-A} represents perfect fairness where every thread acquires the lock equally (e.g., \texttt{[100, 100, 100, 100, 100, 100, 100, 100]}).
+    \item \textbf{JF (Jain Failure Cases):} Scenarios specifically crafted to expose the ``Jain divergence zone''---where Jain reports high fairness ($J \geq 0.8$) while Gini still indicates true inequality ($G \geq 0.15$). For instance, \emph{JF-1 (Mild Skew)} models a two-tier distribution where half the threads get 2.5$\times$ the share of the others (e.g., \texttt{[120, 120, 120, 120, 48, 48, 48, 48]}), \emph{JF-2 (Moderate Skew)} models a 3$\times$ gap (e.g., \texttt{[150, 150, 150, 150, 50, 50, 50, 50]}), and \emph{JF-3 (Extreme Outlier)} models a single starved thread (e.g., \texttt{[115, 115, 115, 115, 115, 115, 115, 5]}).
+\end{itemize}
+These synthetic cases benchmark the metrics themselves before applying them to real synchronization primitives.
+
+\subsubsection{Results}
+Figure~\ref{fig:fairness_scatter} plots Jain (higher is fairer) against Gini (lower is fairer). The shaded region ($J \geq 0.8$, $G \geq 0.15$) highlights configurations where Jain appears optimistic despite measurable imbalance. Several points fall in this region, demonstrating that Jain can mask moderate skew, while Gini remains sensitive.
+
+Figure~\ref{fig:real_locks_bars} shows fairness trends across primitives as thread count increases. At low thread counts, all locks exhibit near-uniform acquisition due to limited contention. As contention increases, SpinLock (TAS) degrades significantly because threads repeatedly compete on a shared cache line, allowing recently successful threads to reacquire the lock quickly while others are delayed, leading to severe imbalance. For the SpinLock under high contention, Jain's index decreases only moderately, whereas Gini increases sharply, making the imbalance much more explicit. In contrast, MCS maintains strong fairness due to its queue-based design, which enforces FIFO ordering and prevents overtaking. Blocking primitives such as \texttt{std::mutex} and semaphores remain relatively fair, as the OS scheduler redistributes CPU time among waiting threads, although minor imbalance can still arise from scheduling variability.
+
+\textbf{Key finding:} \emph{Fairness varies significantly across lock designs under contention: MCS and blocking primitives maintain near-uniform acquisition, while SpinLock exhibits increasing imbalance as thread count rises. Jain’s index tends to saturate near high fairness and can hide moderate skew imbalance, whereas the Gini coefficient provides better sensitivity to imbalance, finer discrimination and more clearly reflects skew and starvation. Overall as a result, Gini is a more reliable standalone metric for evaluating fairnessfairness evaluation, especially under contention.}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=1\linewidth]{figs/jain_vs_gini_scatter.png}
+\caption{Jain vs Gini: Detecting metric divergence where Jain reports fairness but Gini reveals inequality.}
+\label{fig:fairness_scatter}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=1\linewidth]{figs/real_locks_jain_gini_bars.png}
+\caption{Real locks: Jain (blue) and Gini (red) on the same axes for 2, 4, and 8 threads; Gini highlights fairness degradation of spinlocks at high contention.}
+\label{fig:real_locks_bars}
+\end{figure}
+
+\subsection{Experiment 5: Latency Distribution and Performance Counter Analysis}
+\label{sec:latency}
+
+\subsubsection{Setup}
+We evaluate (i) latency distribution (P50, P95, P99, P99.9) at $T=8$ using reservoir sampling over 5 runs, and (ii) cache and branch MPKI across $T\in{2,4,8}$. Hardware counters are collected via \texttt{perf} (cache misses, branch misses, instructions) to relate tail latency to microarchitectural overheads.
+
+\subsubsection{Results and Interpretation}
+
+\paragraph{Latency Distribution.}
+Figure~\ref{fig:latency_cdf} shows that MCS Lock has the most concentrated distribution with minimal tail latency due to FIFO ordering and single handoff per acquisition. SpinLock (TAS) exhibits the widest distribution and highest tail latency, caused by repeated failed atomic operations under contention. \texttt{std::mutex} and Semaphore show heavy-tailed behaviour due to kernel blocking and scheduling delays.
+
+\paragraph{MPKI Analysis.}
+Figure~\ref{fig:cache_mpki} reveals three behaviours. MCS Lock attains the highest cache MPKI (peaking at $\approx$22.5) due to pointer chasing, yet maintains low latency since these misses are local and non-amplifying. SpinLock shows slightly lower MPKI but significantly higher latency because misses occur on a shared cache line, triggering coherence invalidations and retry loops. In contrast, blocking primitives have low MPKI since threads sleep under contention, but incur high tail latency due to context-switch and wake-up delays. Branch MPKI follows a similar trend, with higher values for spin-based locks due to polling loops. Divide this into points - for mcs, spinlock, blocking based, explain little more in detail (not too much), give me latex code
+
+\textbf{Key finding:} \emph{MPKI does not directly determine latency. MCS Lock achieves low tail latency despite high MPKI by avoiding contention amplification, whereas SpinLock suffers from expensive, shared misses. Blocking primitives minimise hardware overhead but shift cost to OS scheduling, resulting in low MPKI but high latency. Thus, latency is governed by how misses interact with contention, not merely their frequency.}
+
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=1\linewidth]{figs/latency_cdf.png}
+\caption{Empirical CDF of lock-acquisition latency at 8 threads; vertical lines mark P50, P95, P99, P99.9 percentiles.}
+\label{fig:latency_cdf}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=1\linewidth]{figs/mpki_per_thread.png}
+\caption{Cache and Branch MPKI (misses per 1000 instructions) vs.\ thread count}
+\label{fig:cache_mpki}
+\end{figure}
+
+\subsection{Experiment 6: Throughput Saturation}
+\label{sec:saturation}
+
+\subsubsection{Setup}
+This experiment sweeps thread count from 1 to 16 and reports throughput under two critical-section sizes: 0 cycles and 500 cycles. The vertical shaded band marks the oversubscribed region beyond the system's 12 logical CPUs. All runs use the same warmup, repetition count, and pinning policy as the earlier experiments.
+
+\subsubsection{Results}
+Figure~\ref{fig:saturation} shows the saturation curves under two regimes. 
+With a zero-cycle critical section, throughput peaks at low thread counts (2–4 threads) and then declines as contention increases. SpinLock and MCS achieve the highest throughput initially due to low overhead, but both degrade rapidly as threads compete for the same cache line. In contrast, \texttt{std::mutex} and Semaphore exhibit lower peak throughput but stabilize under contention, maintaining steady performance beyond 8 threads.
+
+With 500 cycles of critical-section work, throughput differences across primitives are reduced, and saturation occurs more gradually. MCS performs best up to moderate thread counts (8 threads), benefiting from reduced contention through queueing. However, once the system becomes oversubscribed ($>$ 12 threads), blocking primitives (\texttt{std::mutex} and Semaphore) are more robust, while spinning-based approaches degrade due to increased scheduling and coherence overheads.
+
+Across both workloads, throughput saturates well before the hardware limit and declines in the oversubscribed region, demonstrating that adding threads beyond available cores reduces overall system throughput.
+
+\textbf{Key finding:} \emph{Throughput saturates at modest thread counts due to contention, and declines under oversubscription. Spinning locks achieve higher peak performance at low contention, while blocking primitives provide more stable performance when the number of runnable threads exceeds available hardware resources.}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=1\linewidth]{figs/throughput_saturation.png}
+\caption{Throughput saturation curves at 0 and 500 critical-section cycles. The shaded region indicates oversubscription beyond 12 logical CPUs.}
+\label{fig:saturation}
+\end{figure}
+
+
+\subsection{Real-World Workloads}
+\label{sec:workloads}
+
+\subsubsection{Setup}
+To validate microbenchmark trends in application-level settings, we evaluate two concurrent workloads: a hash table (coarse mutex, striped RW-lock, lock-free CAS) and a bounded producer-consumer queue (mutex queue, semaphore queue, lock-free ring). Throughput is measured across thread counts from 1 to 12 with 10 repetitions per point.
+
+\subsubsection{Results}
+
+Figures~\ref{fig:workload_hash_balanced} and~\ref{fig:workload_queue_balanced} show the balanced scenarios.
+
+For the \textbf{hash table}, the lock-free implementation scales nearly linearly with thread count and achieves the highest throughput. The striped RW-lock improves over the coarse mutex by reducing contention via partitioning, but begins to plateau at higher thread counts due to lock coordination overhead. The coarse mutex performs worst, with throughput degrading as threads increase, indicating strong serialization bottlenecks.
+
+For the \textbf{producer--consumer queue}, the lock-free ring buffer achieves the highest throughput and scales well up to moderate thread counts before slightly tapering, reflecting reduced contention but eventual resource saturation. In contrast, both mutex and semaphore-based queues degrade rapidly beyond 2--4 threads and flatten at low throughput levels due to blocking, context-switching overhead, and contention on shared queue state.
+
+Across the remaining scenarios, similar trends are observed, with workload characteristics influencing the degree of performance divergence:
+
+\begin{itemize}
+    \item \textbf{Bursty backpressure:} Overall throughput is significantly lower across all implementations due to intermittent imbalance between producers and consumers. The lock-free queue still scales better, but its advantage is reduced since threads frequently stall on full/empty conditions rather than lock contention.
+    
+    \item \textbf{Balanced mixed access (hash table):} Lock-free maintains strong scalability, while striped locking shows moderate gains but plateaus. Coarse locking degrades steadily due to increasing contention across buckets.
+    
+    \item \textbf{Read-dominant workloads:} The performance gap widens. Lock-free benefits from minimal coordination on reads, while striped RW-lock allows concurrent readers but still incurs locking overhead. Coarse mutex remains a scalability bottleneck.
+    
+    \item \textbf{Write-dominant workloads:} All approaches experience increased contention, but lock-free retains a clear advantage by avoiding blocking. RW-lock performance degrades relative to read-heavy cases due to exclusive write locking.
+    
+    \item \textbf{Hotspot / small-buffer contention:} Localized contention (same buckets or queue slots) severely impacts blocking approaches, which serialize access. Lock-free continues to perform best but shows reduced gains due to increased CAS retries.
+    
+    \item \textbf{Delete-heavy / churn (hash table):} Frequent updates increase synchronization overhead. Lock-free remains superior but with slightly reduced efficiency due to retry costs.
+    
+    \item \textbf{Fan-in / fan-out (queue):} Imbalanced producer/consumer ratios increase contention asymmetry. Lock-free handles this better through non-blocking progress, while mutex and semaphore queues suffer from increased waiting and synchronization overhead.
+\end{itemize}
+
+Overall, the results consistently show that \textbf{contention on shared critical paths is the dominant factor limiting scalability}. Lock-free designs mitigate this by avoiding blocking and enabling fine-grained progress, whereas lock-based approaches eventually suffer from coordination overhead and serialization.
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=1\linewidth]{figs/hashtable_balanced_uniform.png}
+\caption{Concurrent hash table throughput under balanced mixed access.}
+\label{fig:workload_hash_balanced}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=1\linewidth]{figs/producer_consumer_balanced_1to1.png}
+\caption{Bounded producer-consumer queue throughput under balanced 1:1 producer-consumer load.}
+\label{fig:workload_queue_balanced}
+\end{figure}
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=1\linewidth]{figs/producer_consumer_bursty_backpressure.png}
+    \caption{Bounded producer--consumer queue under bursty backpressure.}
+    \label{fig:queue_bursty}
+\end{figure}
+
+\subsection{Summary}
+
+Table~\ref{tab:summary} presents a qualitative comparison across
+the four primitives across all microbenchmark dimensions.
+
+\begin{table}[!htbp]
+\centering
+\caption{Compact Qualitative Summary Across All Microbenchmark Dimensions}
+\label{tab:summary}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Dimension} & \textbf{Mutex} & \textbf{Sem.}
+  & \textbf{Spin} & \textbf{MCS} \\
+\midrule
+Scalability (Exp.~1)                & Med. & Poor & Poor & \textbf{Best} \\
+Short CS throughput (Exp.~2)        & Med. & Poor & \textbf{Best} & Good \\
+False-sharing robustness (Exp.~3)   & Poor & Poor & Poor & \textbf{Best} \\
+Fairness under contention (Exp.~4)  & Good & Good & Poor & \textbf{Best} \\
+Tail-latency behavior (Exp.~5)      & Poor & Poor & Poor & \textbf{Best} \\
+Oversubscription stability (Exp.~6) & Good & Good & Poor & Med. \\
+\bottomrule
+\end{tabular}
+\end{table}
+% -------------------------------------------------------
+% 6.  Conclusion
+% -------------------------------------------------------
+% \section{Conclusion and Future Work}
+% \label{sec:conclusion}
+
+% This paper has presented the design, methodology, and initial results
+% of a comprehensive synchronization benchmark suite comparing
+% \texttt{std::mutex}, POSIX Semaphore, TAS SpinLock, and MCS Lock.
+% Three of six planned microbenchmark experiments are complete.
+
+% Scalability results confirm the $O(1)$ coherence-traffic advantage of
+% MCS Lock: it is the only primitive whose throughput does not decrease
+% below its single-thread baseline as contention increases.
+% Contention results quantify the spinlock--mutex crossover at
+% approximately 100 busy-loop cycles of critical-section work,
+% providing a concrete engineering threshold.
+% False-sharing results demonstrate a $4.9\times$ throughput penalty
+% avoidable only by cache-line padding or MCS Lock's local-spinning
+% design.
+
+% Ongoing work includes: (i) completing the Fairness (Gini
+% coefficient), Latency Distribution, and Throughput Saturation
+% experiments; (ii) executing all six access-pattern scenarios for both
+% the concurrent hash table and the producer-consumer queue workloads;
+% and (iii) integrating hardware performance counter data (cache misses,
+% context switches, CPU migrations) using \texttt{perf\_event\_open} to
+% correlate microarchitectural events with lock-level measurements.
+
+% The complete benchmark suite---including C++17 source, Python
+% visualisation scripts, and all raw data---will be released as
+% open-source software upon completion of the full study to support
+% reproducibility and future extension.
+
+% -------------------------------------------------------
+% References
+% -------------------------------------------------------
+
+\FloatBarrier
+\begin{thebibliography}{99}
+
+\bibitem{kode2024analysis}
+O.~Kode and T.~Oyemade,
+``Analysis of synchronization mechanisms in operating systems,''
+arXiv:2409.11271 [cs.OS], Sep.~2024.
+
+\bibitem{mellor1991algorithms}
+J.~M. Mellor-Crummey and M.~L. Scott,
+``Algorithms for scalable synchronization on shared-memory
+multiprocessors,''
+\textit{ACM Trans.\ Comput.\ Syst.\ (TOCS)},
+vol.~9, no.~1, pp.~21--65, Feb.~1991.
+
+\bibitem{anderson1990performance}
+T.~E. Anderson,
+``The performance of spin lock alternatives for shared-memory
+multiprocessors,''
+\textit{IEEE Trans.\ Parallel Distrib.\ Syst.},
+vol.~1, no.~1, pp.~6--16, Jan.~1990.
+
+\bibitem{craig1993building}
+T.~S. Craig,
+``Building FIFO and priority-queueing spin locks from atomic swap,''
+Tech.\ Rep.\ TR~93-02-02, Univ.\ of Washington, Feb.~1993.
+
+\bibitem{magnusson1994queue}
+P.~Magnusson, A.~Landin, and E.~Hagersten,
+``Queue locks on cache coherent multiprocessors,''
+in \textit{Proc.\ 8th Int.\ Parallel Processing Symp.\ (IPPS)},
+pp.~165--171, Apr.~1994.
+
+\bibitem{scott2001scalable}
+M.~L. Scott and W.~N. Scherer,
+``Scalable queue-based spin locks with timeout,''
+in \textit{Proc.\ 8th ACM SIGPLAN Symp.\ Principles and Practice of
+Parallel Programming (PPoPP)}, pp.~44--52, 2001.
+
+\bibitem{gini1921}
+C.~Gini,
+``Measurement of inequality of incomes,''
+\textit{The Economic Journal},
+vol.~31, no.~121, pp.~124--126, Mar.~1921.
+
+\bibitem{welford1962}
+B.~P. Welford,
+``Note on a method for calculating corrected sums of squares and
+products,''
+\textit{Technometrics},
+vol.~4, no.~3, pp.~419--420, Aug.~1962.
+
+
+% \bibitem{michael1996simple}
+% M.~M. Michael and M.~L. Scott,
+% ``Simple, fast, and practical non-blocking and blocking concurrent
+% queue algorithms,''
+% in \textit{Proc.\ 15th Annual ACM Symp.\ Principles of Distributed
+% Computing (PODC)}, pp.~267--275, 1996.
+
+% \bibitem{shalev2006split}
+% O.~Shalev and N.~Shavit,
+% ``Split-ordered lists: Lock-free extensible hash tables,''
+% \textit{J.~ACM}, vol.~53, no.~3, pp.~379--405, 2006.
+
+\bibitem{herlihy2008art}
+M.~Herlihy and N.~Shavit,
+\textit{The Art of Multiprocessor Programming}.
+Morgan Kaufmann, 2008.
+
+\bibitem{georges2007statistically}
+A.~Georges, D.~Buytaert, and L.~Eeckhout,
+``Statistically rigorous Java performance evaluation,''
+in \textit{Proc.\ ACM SIGPLAN Conf.\ Object-Oriented Programming,
+Systems, Languages, and Applications (OOPSLA)},
+pp.~57--76, 2007.
+
+\bibitem{drepper2004futexes}
+U.~Drepper,
+``Futexes are tricky,''
+Red Hat Inc., Tech.\ Rep., ver.~1.2, 2011.
+[Online]. Available: \url{http://www.akkadia.org/drepper/futex.pdf}
+
+\bibitem{fleming1986}
+P.~J. Fleming and J.~J. Wallace,
+``How not to lie with statistics: The correct way to summarize
+benchmark results,''
+\textit{Commun.~ACM}, vol.~29, no.~3, pp.~218--221, Mar.~1986.
+
+\bibitem{vyukov2010bounded}
+D.~Vyukov,
+``Bounded MPMC queue,'' 2010.
+[Online]. Available:
+\url{https://www.1024cores.net/home/lock-free-algorithms/queues/bounded-mpmc-queue}
+
+\end{thebibliography}
+
+\end{document}

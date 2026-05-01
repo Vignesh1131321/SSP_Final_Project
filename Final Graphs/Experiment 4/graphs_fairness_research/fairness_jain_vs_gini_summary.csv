@@ -1,0 +1,7 @@
+scenario,jain_8t,gini_8t,observation
+A_perfect_fairness,1.0,0.0,Near-perfect fairness
+B_mild_imbalance,0.94,0.13,Jain hides inequality
+E_random_distribution,0.8400000000000001,0.235,Moderate inequality
+C_moderate_skew,0.66,0.24,Moderate inequality
+F_realistic_contention,0.25,0.75,Severe inequality/starvation
+D_severe_starvation,0.14,0.84,Severe inequality/starvation
